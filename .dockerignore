@@ -1,0 +1,15 @@
+bin/
+obj/
+.git/
+.github/
+.vs/
+.vscode/
+.qwen/
+**/.DS_Store
+*.md
+*.sln
+TestBridgeBidder/
+BridgeMindBidding.Api.Tests/
+bridgit/
+Dockerfile
+.dockerignore
