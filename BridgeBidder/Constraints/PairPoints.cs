@@ -110,7 +110,7 @@ namespace BridgeBidding
             var pointsThis = GetPoints(call, ps, ps.PublicHandSummary);
             var pointsPartner = GetPoints(call, ps.Partner, ps.Partner.PublicHandSummary);
             var suit = Constraint.GetSuit(_suit, call);
-            int showMin = Math.Max(_min - pointsPartner.Min, 0);
+            int showMin = Math.Max(_min - pointsPartner.Max, 0);
             int showMax = Math.Max(_max - pointsPartner.Min, 0);
             PositionState firstToShow = suit == null ? null : ps.PairState.FirstToShow((Suit)suit);
             if (this._useStartingPoints || firstToShow == null)

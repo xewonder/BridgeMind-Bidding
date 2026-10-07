@@ -6,6 +6,17 @@ namespace BridgeBidding
 {
     public class PairHasMinShape : HandConstraint
     {
+        // A trump fit needs cards from both hands.  Counting the pair's total length alone lets a
+        // hand that cannot support the suit at all still claim a fit, because partner's own length
+        // (8+ when partner has bid the suit twice) satisfies the count by itself.  A singleton is not
+        // support for anything, so a hand known to hold fewer than two of the suit never conforms.
+        // Two - not three - because the system does raise partner's long suit on a doubleton when the
+        // values justify it (see TestBridgeBidder/TwoOverOneGameForce/Partscore 3S.pbn).
+        // "Max" is used deliberately: an unbid hand has an unknown shape (max 10) and is left alone,
+        // while a hand whose length is known - the private hand used for choosing a call - is judged
+        // on its real holding.
+        public const int MINIMUM_SUPPORT = 2;
+
         protected Suit? _suit;
         protected int _min;
         bool _desiredValue;
@@ -47,6 +58,8 @@ namespace BridgeBidding
             if (s is Suit suit)
             {
                 (int Min, int Max) shape = hs.Suits[suit].GetShape();
+                // No support, no fit - partner's length alone must not carry the count.
+                if (shape.Max < MINIMUM_SUPPORT) return !_desiredValue;
                 (int Min, int Max) partnerShape = ps.Partner.PublicHandSummary.Suits[suit].GetShape();
                 return (shape.Max + partnerShape.Min >= _min) ? _desiredValue : !_desiredValue;
             }
@@ -65,7 +78,11 @@ namespace BridgeBidding
                 (int Min, int Max) shape = ps.PublicHandSummary.Suits[suit].GetShape();
                 (int Min, int Max) partnerShape = ps.Partner.PublicHandSummary.Suits[suit].GetShape();
                 // If we must have a minimum of _min cards then _min - partners.min must be our new minimum
-                // shown.  
+                // shown.
+                // NOTE: deliberately uses partner's MINIMUM.  Using the maximum (so that a fit claim only
+                // charges the bidder for cards partner cannot be counted on for) loses partner's length
+                // entirely and makes "Dummy points make game.pbn: Four Heart basic 2/1 (Seat E, Bid 3)"
+                // bid 3NT instead of 4H.
                 int newMin = _min - partnerShape.Min;
                 // Don't know exaclty what to do here if Min becomes > max
                 // Will make sure range is always valid by taking max of shape.Max and newMin
