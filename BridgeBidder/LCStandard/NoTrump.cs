@@ -200,8 +200,16 @@ namespace BridgeBidding
 
             if (ps.RHO.Bid is Bid rhoBid && !rhoBid.Equals(Bid._2C))
             {
-                // TODO: Handle interfererence better than this...
-                return ps.PairState.BiddingSystem.GetPositionCalls(ps);
+                // The 1NT agreements are off in competition - the convention card carries no
+                // Lebensohl - so Stayman, transfers and Gerber are not offered here.  A new suit
+                // must still describe the bidder's own hand rather than be swallowed by the
+                // competitive ladder, which would read it as support for a suit partner never bid
+                // (partner opened notrump).  Everything else - no-trump, raises and game bids -
+                // keeps falling through to the same competitive rules as before.
+                var contested = new PositionCalls(ps);
+                contested.AddRules(Natural1NT.NewSuitOverInterference(NTD));
+                contested.AddRules(Compete.CompBids);
+                return contested;
             }
             // TODO: Interferrence?  Probably do something globally here...
             var choices = new PositionCalls(ps);
@@ -254,6 +262,23 @@ namespace BridgeBidding
         public static IEnumerable<CallFeature> Respond(NoTrumpDescription ntd)
         {
             return new Natural1NT(ntd).NaturalResponse();
+        }
+
+        // Responder's new suit after an opponent has interfered with partner's notrump.  Same
+        // declaration style as the uncontested natural responses above - Shape(5, 11) takes its suit
+        // from the bid itself, so one rule per level covers all four suits - but deliberately no
+        // PartnerBids factory: the interference auction leaves the opener's follow-up on the
+        // competitive ladder instead of the transfer-completion rebid, which has no way to raise a
+        // suit partner bid naturally.  IsNotCueBid keeps a bid of the opponents' own suit out of this.
+        public static IEnumerable<CallFeature> NewSuitOverInterference(NoTrumpDescription ntd)
+        {
+            return new CallFeature[]
+            {
+                Shows(Bid._2C, IsNotCueBid, Shape(5, 11), ntd.RR.LessThanInvite),
+                Shows(Bid._2D, IsNotCueBid, Shape(5, 11), ntd.RR.LessThanInvite),
+                Shows(Bid._2H, IsNotCueBid, Shape(5, 11), ntd.RR.LessThanInvite),
+                Shows(Bid._2S, IsNotCueBid, Shape(5, 11), ntd.RR.LessThanInvite),
+            };
         }
 
 
