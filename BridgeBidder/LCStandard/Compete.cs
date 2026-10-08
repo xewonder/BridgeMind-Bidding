@@ -62,6 +62,31 @@ namespace BridgeBidding
 
 
             });
+
+            // Raising partner's naturally shown suit is the one rung this ladder could not reach.
+            // Its pair-point bands are keyed to a bid level that is already illegal once partner has
+            // bid the suit, and a *guaranteed* pair minimum is unsatisfiable opposite a partner whose
+            // honest range starts at zero.  So reuse the uncontested raise ladder instead - RaisePartner()
+            // (partner has shown the suit, a real 8+ card fit, and the call is a raise of the given jump
+            // size) with the same dummy-point band OpenBid2.ResponderChangedSuits uses - and take the
+            // raise level from the auction rather than from a literal, so it stays correct when the
+            // opponents have already crowded the auction.  Stops at the jump raise on purpose: no
+            // five-level rung here, which is the failure Board #127 was about.
+            foreach (Suit raiseSuit in Card.Suits)
+            {
+                var cheapRaise = ps.BiddingState.Contract.NextAvailableBid(raiseSuit);
+                if (cheapRaise == null || cheapRaise.Level > 4) continue;
+
+                bids.Add(Shows(cheapRaise, Shape(raiseSuit, 3, 13),
+                               RaisePartner(raiseSuit, fit: 9), Open.DummyMinimum));
+                if (cheapRaise.Level < 4)
+                {
+                    bids.Add(Shows(new Bid(cheapRaise.Level + 1, raiseSuit),
+                                   Shape(raiseSuit, 3, 13),
+                                   RaisePartner(raiseSuit, jump: 1, fit: 9), Open.DummyMedium));
+                }
+            }
+
             bids.AddRange(ForcedBid.Bids(ps));
             bids.Add(Shows(Call.Pass));
             return bids;

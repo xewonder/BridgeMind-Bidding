@@ -119,33 +119,104 @@ namespace TestBridgeBidder
         }
 
         [TestMethod]
-        public void Board132_StillPassesOnPairPointsNotOnSupport()
+        public void Board132_WestRecognisesTheSpadeFit()
         {
-            // Pins WHICH gate produces the Pass now that the fit is described correctly, so the
-            // remaining competitive-raise defect cannot be mistaken for a lost fit - and so a
-            // future change cannot quietly re-lose the fit and still pass this test.
+            // The fit must be what lets West compete: no raise candidate may be rejected for lack of
+            // support, and a raise must not be refused merely because the pair points cannot be
+            // proven, which is the defect the raise ladder replaced.
             var game = Game.Parse(BOARD_132_DEAL, "All");
             game.ParseAuction(BOARD_132_AUCTION);
             var state = new BiddingState(game);
             var west = state.NextToAct;
             Assert.AreEqual(Direction.W, west.Direction);
 
-            var entry = west.GetPositionCalls().BidRuleLog
-                .SingleOrDefault(e => e.BidRule.Call.ToString() == "3S");
+            var raises = west.GetPositionCalls().BidRuleLog
+                .Where(e => e.BidRule.Call.ToString() == "3S" || e.BidRule.Call.ToString() == "4S")
+                .ToList();
+            Assert.IsTrue(raises.Count > 0, "no rule ever considered a spade raise");
 
-            Assert.IsNotNull(entry, "the 3S rule was never considered");
-            Assert.AreNotEqual(PositionCalls.LogAction.Chosen, entry.Action);
+            foreach (var entry in raises)
+            {
+                var failing = entry.FailingConstraints == null
+                    ? new List<string>()
+                    : entry.FailingConstraints
+                        .Select(c => c.GetLogDescription(entry.BidRule.Call, west)).ToList();
 
-            var failing = entry.FailingConstraints
-                .Select(c => c.GetLogDescription(entry.BidRule.Call, west)).ToList();
+                Assert.IsFalse(
+                    failing.Any(f => f.Contains($"8+ pair {Suit.Spades.ToSymbol()}") ||
+                                     f.Contains($"9+ pair {Suit.Spades.ToSymbol()}")),
+                    $"West's four spades were not treated as a fit: {string.Join(", ", failing)}");
+            }
 
-            Assert.IsFalse(
-                failing.Any(f => f.Contains($"8+ pair {Suit.Spades.ToSymbol()}")),
-                $"West's four spades opposite a five-card-plus suit were no longer treated as a fit: " +
-                string.Join(", ", failing));
-            Assert.IsTrue(failing.Any(f => f.StartsWith("23") && f.EndsWith("pair points")),
-                "3S was expected to be rejected by the 23-25 pair-points band, not by anything else: " +
-                string.Join(", ", failing));
+            Assert.AreEqual("4S", west.GetPositionCalls().BestCall.Call.ToString());
+        }
+
+        // The 1NT opener's own hand, varied only in strength and in support for partner's suit,
+        // so the raise tests below are directly comparable.
+        private const string WEST_GAME_RAISE = "KQ86.AQ84.K5.QT9";    // 16 HCP, 4 spades
+        private const string WEST_MIN_RAISE = "KQ86.AQ84.Q5.QT9";     // 15 HCP, 4 spades
+        private const string WEST_TWO_CARDS = "A5.KQJ8.K43.8732";     // 16 HCP, only 2 spades
+
+        private static string SuggestWest(string west, string auction) =>
+            BridgeBidder.SuggestBid($"W:{west} - - -", "All", auction);
+
+        /// <summary>
+        /// Level of a raise of partner's suit; anything that is not a bid in that suit
+        /// (Pass, NT, another suit) does not compete in the fit and counts as zero.
+        /// </summary>
+        private static int RaiseLevel(string bid, char partnerSuit)
+        {
+            if (bid.Length < 2 || bid[0] < '1' || bid[0] > '7') return 0;
+            return bid[1] == char.ToUpperInvariant(partnerSuit) ? bid[0] - '0' : 0;
+        }
+
+        [TestMethod]
+        public void Board132_RaisesToGameOnRealFitAndMaximumValues()
+        {
+            var bid = SuggestWest(WEST_GAME_RAISE, BOARD_132_AUCTION);
+
+            Assert.AreNotEqual("Pass", bid, "West passed a game raise with four spades and maximum values");
+            Assert.AreEqual("4S", bid);
+
+            // The rule that produced it must be the raise ladder, and it must say so.
+            var game = Game.Parse(BOARD_132_DEAL, "All");
+            game.ParseAuction(BOARD_132_AUCTION);
+            var west = new BiddingState(game).NextToAct;
+            var chosen = west.GetPositionCalls().BidRuleLog
+                .Where(e => e.Action == PositionCalls.LogAction.Chosen)
+                .Select(e => e.ToString()).ToList();
+            Assert.IsTrue(chosen.Any(c => c.Contains("9+ pair")),
+                $"the game raise was not justified by a real partnership fit: {string.Join(" / ", chosen)}");
+        }
+
+        [TestMethod]
+        public void Board132_MinimumValuesRaiseOnlyOneLevel()
+        {
+            // Same auction and same four spades, one point weaker: the cheap raise is available and
+            // the game jump is not, so the rung is monotonic in the actor's own values.
+            var bid = SuggestWest(WEST_MIN_RAISE, BOARD_132_AUCTION);
+            Assert.AreEqual("3S", bid, "a minimum 1NT opener jumped to game on partner's competitive suit");
+        }
+
+        [TestMethod]
+        public void DoesNotRaiseToGameOnTwoCardSupport()
+        {
+            // Insufficient fit must not buy a raise even with strong values and a big pair length,
+            // because partner's own length can supply the pair count on its own.
+            var bid = SuggestWest(WEST_TWO_CARDS, BOARD_132_AUCTION);
+            Assert.AreEqual(0, RaiseLevel(bid, 'S'),
+                $"two spades was enough to raise partner's spades: {bid}");
+        }
+
+        [TestMethod]
+        public void AnalogousRaiseWorksInAnotherSuitAndSeat()
+        {
+            // Dealer N, so the notrump opener is North and responder is South; partner's suit is
+            // hearts, and the opponents have competed to the three level.  Nothing here is spade
+            // or West specific.
+            var deal = "N:KQ86.AK84.K53.QT - - -";
+            var bid = BridgeBidder.SuggestBid(deal, "None", "1NT 2D 2H 3D");
+            Assert.AreEqual("4H", bid, $"North did not raise South's natural hearts: {bid}");
         }
 
         [TestMethod]
