@@ -61,6 +61,13 @@ namespace BridgeBidding
 			if (throwExceptionIfNoBestCall)
 				throw new AuctionException(null, biddingState.NextToAct.Direction, biddingState.Contract,
 						"No suggested call given by bidding system.");
+			// Passing is a call with a meaning, not a neutral default.  A conforming Pass rule would
+			// have been BestCall above, so reaching here means no rule endorsed anything.  If partner's
+			// call still demands an answer, silently returning Pass converts that call - a takeout
+			// double, most often - into penalties, so report the missing rung instead of bidding it.
+			if (biddingState.NextToAct.ForcedToBid)
+				throw new AuctionException(null, biddingState.NextToAct.Direction, biddingState.Contract,
+						"No suggested bid for a position still forced to answer partner's call.");
 			//
 			// This is an error, so we will just pass.  If there is a rule for pass then select it,
 			// otherwise create one.

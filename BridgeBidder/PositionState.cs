@@ -132,9 +132,17 @@ namespace BridgeBidding
 		public bool ForcedToBid
 		{
 			get
-			{		
+			{
 				// TODO: This only returns true IFF we have to bid because of a forcing 1 round bid. NOT is we are forced to game.
-				return (PairState.IsForcedToBid(this) && !RightHandOpponent._bids.Last().Equals(Call.Pass));
+				if (!PairState.IsForcedToBid(this)) return false;
+				// _bids holds CallDetails, so any test on it has to go through .Call: comparing the
+				// wrapper with Call.Pass is never true and left every one-round force permanently on.
+				// An opponent's bid lifts the obligation to answer partner (a pass does not - that is
+				// what makes a takeout double un-passable), except over partner's redouble, where the
+				// pair must still keep the auction alive.
+				if (RightHandOpponent.GetBidHistory(0) is Bid &&
+					Partner.GetBidHistory(0)?.Equals(Call.Redouble) != true) return false;
+				return true;
 			}
 		}
 		

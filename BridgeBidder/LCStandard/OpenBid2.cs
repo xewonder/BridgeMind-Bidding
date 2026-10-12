@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Data.SqlTypes;
+using System.Linq;
 
 namespace BridgeBidding
 {
@@ -85,16 +86,73 @@ namespace BridgeBidding
 				Shows(Bid._3H, IsRebid, Shape(6, 11), Points(17, 19)),
 				Shows(Bid._4S, IsRebid, ExcellentPlusSuit, Shape(7, 11), Points(20, 21)),
 				Shows(Bid._3S, IsRebid, Shape(6, 11), Points(17, 19)),
+
+				// Above the 17-19 ceiling the hand still owes an answer, so it needs a band to keep
+				// speaking instead of falling out of the ladder: a seven-card suit goes to game, a
+				// six-card suit rebids at the jump level, and a long minor gets the backup the TODO
+				// below asked for.  These are declared after the rungs above, so a hand already inside
+				// 17-18, 17-19 or the excellent-suit 20-21 game band keeps its established bid.
+				Shows(Bid._4H, IsRebid, Shape(7, 11), Maximum),
+				Shows(Bid._4S, IsRebid, Shape(7, 11), Maximum),
+				Shows(Bid._3H, IsRebid, Shape(6, 11), Maximum),
+				Shows(Bid._3S, IsRebid, Shape(6, 11), Maximum),
+				Shows(Bid._3C, IsRebid, Shape(6, 11), Maximum),
+				Shows(Bid._3D, IsRebid, Shape(6, 11), Maximum),
 				// TODO: Need to implement minors here too.  Long, strong minors need a backup if no reverse available.
 				// 
 
 				// TODO: Need to implement 3NT bid if long running minor.  Suits stopped????
 
 				// Lowest priority if nothing else fits is bid NT
-				Shows(Bid._1NT, Balanced, Points(Rebid1NT))
+				Shows(Bid._1NT, Balanced, Points(Rebid1NT)),
+
+				// Last of all: an answer is owed to a forcing call, and a Pass here would pass out a
+				// contract partner insisted we keep bidding.  See AnswerIsOwed.
+				AnswerIsOwed(ps)
             );
 		// REMOVED THIS CRUTCH ---	choices.AddRules(Compete.CompBids(ps));
 			return choices;
+		}
+
+		// An answer is owed to a call the convention marks forcing and none of the descriptive rungs
+		// above describes this hand.  Bid the most natural continuation at the cheapest legal level, in
+		// this order: support partner's suit with three-card tolerance, rebid the suit we named
+		// ourselves, then the cheapest bid in a suit nobody has named.  The group is declared after
+		// every other rung in the ladder, so it can never displace a descriptive bid or a no-trump
+		// rebid, and it contains no Pass: a hand that owes an answer bids it.  A hand that nothing here
+		// describes stays an explicit failure rather than an invented contract.
+		private static CallFeatureGroup AnswerIsOwed(PositionState ps)
+		{
+			var group = new CallFeatureGroup();
+			if (!ps.ForcedToBid) return group;
+
+			Suit? partnerSuit = (ps.Partner.GetBidHistory(0) as Bid)?.Suit;
+			Suit? ownSuit = (ps.GetBidHistory(0) as Bid)?.Suit;
+
+			if (partnerSuit is Suit support)
+			{
+				var cheap = ps.BiddingState.Contract.NextAvailableBid(support);
+				if (cheap != null) group.Features.Add(Shows(cheap, HasMinShape(support, 3), IsNotCueBid));
+			}
+			if (ownSuit is Suit rebid && (!partnerSuit.HasValue || rebid != partnerSuit.Value))
+			{
+				var cheap = ps.BiddingState.Contract.NextAvailableBid(rebid);
+				if (cheap != null) group.Features.Add(Shows(cheap, HasMinShape(rebid, 5), IsNotCueBid));
+			}
+
+			// Cheapest legal level first, and among equal levels the highest-ranking suit.  Only suits
+			// nobody has named, so this never bids an opponent's strain.
+			var unbid = new List<Bid>();
+			foreach (Suit s in Card.Suits)
+			{
+				if (ps.BiddingState.Contract.FirstToNameStrain.ContainsKey(s.ToStrain())) continue;
+				var bid = ps.BiddingState.Contract.NextAvailableBid(s);
+				if (bid != null) unbid.Add(bid);
+			}
+			foreach (var bid in unbid.OrderBy(b => b.Level).ThenByDescending(b => (int)b.Strain))
+				group.Features.Add(Shows(bid, HasMinShape((Suit)bid.Suit, 3)));
+
+			return group;
 		}
 
 		public static PositionCalls TwoOverOne(PositionState ps)
