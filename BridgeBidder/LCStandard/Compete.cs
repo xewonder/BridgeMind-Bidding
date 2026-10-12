@@ -46,9 +46,16 @@ namespace BridgeBidding
                 Shows(Bid._3H, Fit8Plus, CompeteTo3),
                 Shows(Bid._3S, Fit8Plus, CompeteTo3),
 
+                // A competitive 2NT is the natural "I have the opponents' suits stopped and a
+                // balanced hand" description, so it must require the shape: the stopper test below
+                // only inspects strains the opponents actually named, which leaves a hand with a
+                // singleton in an unbid suit claiming a stopper it does not have.  3NT deliberately
+                // stays un gated by shape - it is also the bid for a running long suit, see
+                // TestBridgeBidder/TwoOverOneGameForce/Responder Rebid.pbn and FitSupportTests'
+                // "bids no trumps instead" controls.
                 Shows(Bid._3NT, OppsStopped, CompeteTo3NT),
 
-                Shows(Bid._2NT, IsOppsContract, OppsStopped, CompeteTo2NT),
+                Shows(Bid._2NT, IsOppsContract, Balanced, OppsStopped, CompeteTo2NT),
 
 
                 Shows(Bid._4C, Not(Gerber.Applies), Fit8Plus, CompeteTo4),
@@ -62,6 +69,34 @@ namespace BridgeBidding
 
 
             });
+
+            // A raise of a suit this position named first, which partner has already supported, is
+            // competition rather than an invitation - but every rung above asks for a pair-point game
+            // or slam try (23-25, 25-31, 26-28, 29-32), so a hand holding a six-card suit, a real
+            // nine-card fit and shortness had nothing to say and the ladder's unconditional Pass spoke
+            // for it.  Value the hand as dummy in the strain we named, which is what credits length and
+            // shortness.  The fit is asked for at eight, not nine, and our own length at six: partner's
+            // published minimum cannot be trusted beyond eight, because the raise's own Fit8Plus rule
+            // back-solves partner's length as (8 - our published minimum), which after a 1D opening
+            // that showed only three diamonds publishes a three-card raise as five-plus.  Measured: a
+            // nine-card test raised a genuine eight-card fit from a five-card suit on that arithmetic
+            // alone.  Six in our own hand plus the eight partner's own rule guaranteed is a fit the
+            // auction actually establishes.
+            //
+            // Deliberate limits, so this cannot become a license to sacrifice: three level maximum
+            // (no four- or five-level competition through this rule), the opponents must hold the
+            // contract, and a vulnerable pair needs two more points.  Declared after every
+            // descriptive, invitational and game rung, and before the unconditional Pass below, so it
+            // can only ever replace that Pass.
+            foreach (Suit ownSuit in Card.Suits)
+            {
+                var compete = ps.BiddingState.Contract.NextAvailableBid(ownSuit);   // cheapest legal level
+                if (compete == null || compete.Level > 3) continue;
+                int floor = ps.IsVulnerable ? 19 : 17;
+
+                bids.Add(Shows(compete, HasShownSuit(ownSuit), HasMinShape(ownSuit, 6), Fit8Plus,
+                               IsOppsContract, DummyPoints(ownSuit, (floor, 40))));
+            }
 
             // Raising partner's naturally shown suit is the one rung this ladder could not reach.
             // Its pair-point bands are keyed to a bid level that is already illegal once partner has

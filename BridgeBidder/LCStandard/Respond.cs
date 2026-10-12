@@ -568,6 +568,16 @@ namespace BridgeBidding
                 //
                 Shows(new Bid(3, openSuit), Fit9Plus, Points(RespondXJump)),
                 
+                // A raise of partner's suit after their opening was doubled agrees the strain and
+                // routes opener's next call to the raise-aware ladder, exactly as the uncontested
+                // ladders do; without it opener is handed the generic compete ladder, which knows
+                // nothing about the established fit.
+                Properties(new Bid(2, openSuit),
+                           (openSuit == Suit.Hearts || openSuit == Suit.Spades)
+                                ? (PositionCallsFactory)OpenBid2.ResponderRaisedMajor
+                                : OpenBid2.ResponderRaisedMinor,
+                           agreeTrump: true),
+
                 Shows(Bid._2C, Partner(HasShownSuit()), Fit8Plus, Points(RespondX1Level)),
                 Shows(Bid._2C, Shape(5, 11), Points(RespondX1Level)),
 
